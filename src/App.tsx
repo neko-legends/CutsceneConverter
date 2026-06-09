@@ -19,7 +19,6 @@ import {
   XCircle
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import logoUrl from "./assets/logo.png";
 
 type Quality = "Balanced" | "High" | "Smaller";
 type OutputResolution = "(native)" | "1920x1080" | "1444p" | "2160p";
@@ -161,6 +160,23 @@ function toOptions(config: AppConfig): ConvertOptions {
     trimEndSeconds: config.trimEndSeconds,
     mp4Codec: config.mp4Codec
   };
+}
+
+function eventLogMessage(payload: ConverterEvent) {
+  if (payload.type === "progress" || payload.type === "fileProgress" || payload.type === "fileStart") {
+    return null;
+  }
+  if (payload.type === "fileDone" && payload.path) {
+    const verb = payload.message?.toLowerCase().includes("skipped") ? "Skipped" : "Finished";
+    return `${verb}: ${fileName(payload.path)}`;
+  }
+  if (payload.type === "fileError" && payload.path) {
+    return `Failed: ${fileName(payload.path)}${payload.message ? ` - ${payload.message}` : ""}`;
+  }
+  if (payload.type === "fileCanceled" && payload.path) {
+    return `Canceled: ${fileName(payload.path)}`;
+  }
+  return payload.message ?? null;
 }
 
 export default function App() {
@@ -472,8 +488,11 @@ export default function App() {
 
     const eventPromise = listen<ConverterEvent>("converter-event", (event) => {
       const payload = event.payload;
-      if (payload.message) {
-        pushLog(payload.message);
+      const logMessage = eventLogMessage(payload);
+      if (logMessage) {
+        pushLog(logMessage);
+      }
+      if (payload.message && payload.type !== "progress" && payload.type !== "fileProgress") {
         setHeadline(payload.message);
       }
 
@@ -638,7 +657,6 @@ export default function App() {
       <main className="app-shell">
         <aside className="sidebar">
           <div className="brand">
-            <img src={logoUrl} alt="" />
             <div>
               <h1>Cutscene</h1>
               <h2>Converter</h2>

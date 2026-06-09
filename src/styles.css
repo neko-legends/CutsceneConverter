@@ -76,16 +76,7 @@ p {
 }
 
 .brand {
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.brand img {
-  width: 76px;
-  height: 76px;
+  margin-bottom: 12px;
 }
 
 h1 {
