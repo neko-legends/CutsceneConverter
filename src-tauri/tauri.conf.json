@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Cutscene Converter",
+  "version": "26.6.9",
+  "identifier": "public.cutscene.converter",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1430",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Cutscene Converter",
+        "width": 1920,
+        "height": 1080,
+        "minWidth": 640,
+        "minHeight": 360,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "dragDropEnabled": true,
+        "backgroundColor": "#090806"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob: asset: https://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "category": "Video",
+    "shortDescription": "Local cutscene video converter",
+    "longDescription": "Cutscene Converter exports local MP4, WebM VP9, and OGV cutscene videos with trim, resolution, codec, batch, and combine tools."
+  }
+}

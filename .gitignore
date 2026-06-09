@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Web/Tauri build output
+dist/
+dist-portable/
+target/
+src-tauri/target/
+*.pdb
+*.msi
+*-setup.exe
+*.zip
+
+# Local runtime/config data
+config.json
+downloads/
+ffmpeg-download/
+python-env/
+models/
+jobs/
+
+# Legacy smoke/repro output and generated media
+_*/
+_*.avi
+_*.m4v
+_*.mkv
+_*.mov
+_*.mp4
+_*.ogv
+_*.webm
+
+# Environment/editor/OS noise
+.env
+.env.*
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
