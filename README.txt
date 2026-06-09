@@ -1,14 +1,27 @@
 Cutscene Converter v26.6.9
 
-Cutscene Converter is now a Tauri desktop app with a React workspace UI.
+Cutscene Converter is a small workflow tool for preparing AI-generated videos
+for game engines such as Godot and Unity.
+
+I originally made it because I needed a fast way to take generated video clips,
+clean up the front and back, convert them into game-friendly formats, scale them
+down when needed, and combine related clips before dropping them into a project.
+It is not trying to be a full video editor. It is just a focused helper for
+getting video into video games. No pun intended.
 
 What it does:
-- Exports MP4 runtime copies from queued video files or folders.
-- Supports MP4 H.264 and H.265, WebM VP9, and OGV outputs.
-- Supports trim start/end, output resolution, overwrite control, recursive folder input, and parallel batch jobs.
-- Combines queued videos in alphabetical order into a first_name_combined.ext output.
-- Finds FFmpeg from settings, app-managed install, nearby portable folders, D:\Tools, or PATH.
-- On Windows, the Install button downloads FFmpeg essentials into the app data folder.
+- Converts queued videos or folders into MP4, WebM VP9, or OGV.
+- Supports MP4 H.264 and H.265 output.
+- Trims the beginning and end of clips.
+- Keeps native resolution or scales output to common game-ready sizes.
+- Combines queued videos in alphabetical order.
+- Handles recursive folder input, overwrite control, and parallel batch jobs.
+- Finds FFmpeg from settings, the app-managed install, nearby portable folders,
+  D:\Tools, or PATH.
+
+FFmpeg:
+- On Windows, use the Install button to download FFmpeg essentials into the app
+  data folder.
 - On Linux, install ffmpeg and ffprobe with your package manager before running.
 
 Windows release outputs:
