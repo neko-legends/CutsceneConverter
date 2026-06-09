@@ -833,8 +833,6 @@ export default function App() {
             </button>
             <small>{queue.length < 2 ? "Queue at least two videos." : `${queue.length} videos queued.`}</small>
           </section>
-
-          <div className="app-version">{runtime?.version ?? APP_VERSION}</div>
         </aside>
 
         <section className="workspace">
