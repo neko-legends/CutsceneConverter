@@ -218,7 +218,7 @@ fn default_config() -> AppConfig {
         trim_start_seconds: 0.0,
         trim_end_seconds: 0.0,
         mp4_codec: "H264".to_string(),
-        show_more_formats: false,
+        show_more_formats: true,
     }
 }
 

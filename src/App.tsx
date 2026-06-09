@@ -115,7 +115,7 @@ const defaultConfig: AppConfig = {
   trimStartSeconds: 0,
   trimEndSeconds: 0,
   mp4Codec: "H264",
-  showMoreFormats: false
+  showMoreFormats: true
 };
 
 const isTauriRuntime = () => "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
