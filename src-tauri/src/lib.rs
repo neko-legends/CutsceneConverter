@@ -423,13 +423,42 @@ fn command_lookup(name: &str) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-fn installed_ffmpeg_path(app: &AppHandle) -> Option<PathBuf> {
-    let dir = app_data_dir(app).ok()?.join("ffmpeg").join("bin");
-    Some(dir.join(if cfg!(target_os = "windows") {
+fn ffmpeg_file_name() -> &'static str {
+    if cfg!(target_os = "windows") {
         "ffmpeg.exe"
     } else {
         "ffmpeg"
-    }))
+    }
+}
+
+fn ffprobe_file_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    }
+}
+
+fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+}
+
+fn portable_ffmpeg_bin_dir() -> Option<PathBuf> {
+    Some(exe_dir()?.join("ffmpeg").join("bin"))
+}
+
+fn portable_ffmpeg_path() -> Option<PathBuf> {
+    Some(portable_ffmpeg_bin_dir()?.join(ffmpeg_file_name()))
+}
+
+fn app_data_ffmpeg_bin_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("ffmpeg").join("bin"))
+}
+
+fn app_data_ffmpeg_path(app: &AppHandle) -> Option<PathBuf> {
+    Some(app_data_ffmpeg_bin_dir(app).ok()?.join(ffmpeg_file_name()))
 }
 
 fn find_named_file(root: &Path, name: &str, max_depth: usize) -> Option<PathBuf> {
@@ -457,21 +486,17 @@ fn find_named_file(root: &Path, name: &str, max_depth: usize) -> Option<PathBuf>
 }
 
 fn ffmpeg_candidates(app: &AppHandle, config: &AppConfig) -> Vec<PathBuf> {
-    let exe_name = if cfg!(target_os = "windows") {
-        "ffmpeg.exe"
-    } else {
-        "ffmpeg"
-    };
+    let exe_name = ffmpeg_file_name();
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| current_dir.clone());
+    let exe_dir = exe_dir().unwrap_or_else(|| current_dir.clone());
     let mut candidates = Vec::new();
     if !config.ffmpeg_path.trim().is_empty() {
         candidates.push(PathBuf::from(config.ffmpeg_path.trim()));
     }
-    if let Some(installed) = installed_ffmpeg_path(app) {
+    if let Some(installed) = portable_ffmpeg_path() {
+        candidates.push(installed);
+    }
+    if let Some(installed) = app_data_ffmpeg_path(app) {
         candidates.push(installed);
     }
     candidates.push(current_dir.join("ffmpeg").join("bin").join(exe_name));
@@ -498,11 +523,7 @@ fn find_ffmpeg(app: &AppHandle, config: &AppConfig) -> Option<PathBuf> {
 }
 
 fn find_ffprobe(ffmpeg_path: Option<&Path>) -> Option<PathBuf> {
-    let exe_name = if cfg!(target_os = "windows") {
-        "ffprobe.exe"
-    } else {
-        "ffprobe"
-    };
+    let exe_name = ffprobe_file_name();
     if let Some(ffmpeg_path) = ffmpeg_path {
         if let Some(parent) = ffmpeg_path.parent() {
             let sibling = parent.join(exe_name);
@@ -1949,16 +1970,67 @@ fn open_path(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|error| format!("Unable to open path: {error}"))
 }
 
+fn can_install_to_dir(dir: &Path) -> bool {
+    if fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let test_path = dir.join(format!(".cc-write-test-{}", Uuid::new_v4().simple()));
+    let writable = fs::write(&test_path, b"test").is_ok();
+    if writable {
+        let _ = fs::remove_file(test_path);
+    }
+    writable
+}
+
+fn copy_existing_ffmpeg_install(source_ffmpeg: &Path, target_bin: &Path) -> Result<bool, String> {
+    if !source_ffmpeg.is_file() {
+        return Ok(false);
+    }
+    let source_bin = source_ffmpeg
+        .parent()
+        .ok_or_else(|| "Unable to resolve existing FFmpeg folder.".to_string())?;
+    fs::create_dir_all(target_bin)
+        .map_err(|error| format!("Unable to create FFmpeg folder: {error}"))?;
+    for name in ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe"] {
+        let source = source_bin.join(name);
+        if source.is_file() {
+            fs::copy(&source, target_bin.join(name))
+                .map_err(|error| format!("Unable to copy {name}: {error}"))?;
+        }
+    }
+    Ok(target_bin.join(ffmpeg_file_name()).is_file())
+}
+
 #[tauri::command]
 fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
     if !cfg!(target_os = "windows") {
         return Err("Automatic FFmpeg install is currently available on Windows only. Install ffmpeg and ffprobe with your system package manager.".to_string());
     }
-    let target_bin = app_data_dir(&app)?.join("ffmpeg").join("bin");
-    let target_ffmpeg = target_bin.join("ffmpeg.exe");
+    if let Some(portable_ffmpeg) = portable_ffmpeg_path().filter(|path| path.is_file()) {
+        return Ok(portable_ffmpeg.display().to_string());
+    }
+
+    let app_data_bin = app_data_ffmpeg_bin_dir(&app)?;
+    let app_data_ffmpeg = app_data_bin.join(ffmpeg_file_name());
+    let target_bin = portable_ffmpeg_bin_dir()
+        .filter(|dir| can_install_to_dir(dir))
+        .unwrap_or_else(|| app_data_bin.clone());
+    let target_ffmpeg = target_bin.join(ffmpeg_file_name());
     if target_ffmpeg.is_file() {
         return Ok(target_ffmpeg.display().to_string());
     }
+
+    if target_bin != app_data_bin
+        && copy_existing_ffmpeg_install(&app_data_ffmpeg, &target_bin)?
+        && target_ffmpeg.is_file()
+    {
+        return Ok(target_ffmpeg.display().to_string());
+    }
+
+    if app_data_ffmpeg.is_file() && target_bin == app_data_bin {
+        return Ok(app_data_ffmpeg.display().to_string());
+    }
+
     fs::create_dir_all(&target_bin)
         .map_err(|error| format!("Unable to create FFmpeg folder: {error}"))?;
     let download_dir = app_data_dir(&app)?.join("ffmpeg-download");

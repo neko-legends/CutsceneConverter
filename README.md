@@ -12,11 +12,11 @@ I originally made it because I needed a fast way to take generated video clips, 
 - Keeps native resolution or scales output to common game-ready sizes.
 - Combines queued videos in alphabetical order.
 - Handles recursive folder input, overwrite control, and parallel batch jobs.
-- Finds FFmpeg from settings, the app-managed install, nearby portable folders, `D:\Tools`, or `PATH`.
+- Finds FFmpeg from settings, the portable app folder, the app-managed fallback install, `D:\Tools`, or `PATH`.
 
 ## FFmpeg
 
-On Windows, use the Install button to download FFmpeg essentials into the app data folder.
+On Windows, use the Install button if FFmpeg is missing. The app downloads FFmpeg essentials into `ffmpeg\bin` next to the portable exe when that folder is writable. If Windows blocks that location, it falls back to the app data folder.
 
 On Linux, install `ffmpeg` and `ffprobe` with your package manager before running.
 

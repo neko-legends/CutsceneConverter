@@ -343,7 +343,7 @@ export default function App() {
     if (!isTauriRuntime()) return;
     setInstallingFfmpeg(true);
     setHeadline("Installing FFmpeg");
-    pushLog("Downloading FFmpeg essentials build.");
+    pushLog("Installing FFmpeg beside the app when possible.");
     try {
       const ffmpegPath = await invoke<string>("install_ffmpeg");
       await persistConfig({ ...config, ffmpegPath });
