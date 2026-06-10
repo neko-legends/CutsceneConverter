@@ -4,6 +4,7 @@ node_modules/
 # Web/Tauri build output
 dist/
 dist-portable/
+release/
 target/
 src-tauri/target/
 *.pdb
