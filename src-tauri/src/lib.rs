@@ -461,6 +461,10 @@ fn app_data_ffmpeg_path(app: &AppHandle) -> Option<PathBuf> {
     Some(app_data_ffmpeg_bin_dir(app).ok()?.join(ffmpeg_file_name()))
 }
 
+fn ffmpeg_install_ready(bin_dir: &Path) -> bool {
+    bin_dir.join(ffmpeg_file_name()).is_file() && bin_dir.join(ffprobe_file_name()).is_file()
+}
+
 fn find_named_file(root: &Path, name: &str, max_depth: usize) -> Option<PathBuf> {
     if max_depth == 0 || !root.is_dir() {
         return None;
@@ -1993,12 +1997,13 @@ fn copy_existing_ffmpeg_install(source_ffmpeg: &Path, target_bin: &Path) -> Resu
         .map_err(|error| format!("Unable to create FFmpeg folder: {error}"))?;
     for name in ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe"] {
         let source = source_bin.join(name);
-        if source.is_file() {
+        let target = target_bin.join(name);
+        if source.is_file() && !target.is_file() {
             fs::copy(&source, target_bin.join(name))
                 .map_err(|error| format!("Unable to copy {name}: {error}"))?;
         }
     }
-    Ok(target_bin.join(ffmpeg_file_name()).is_file())
+    Ok(ffmpeg_install_ready(target_bin))
 }
 
 #[tauri::command]
@@ -2006,8 +2011,8 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
     if !cfg!(target_os = "windows") {
         return Err("Automatic FFmpeg install is currently available on Windows only. Install ffmpeg and ffprobe with your system package manager.".to_string());
     }
-    if let Some(portable_ffmpeg) = portable_ffmpeg_path().filter(|path| path.is_file()) {
-        return Ok(portable_ffmpeg.display().to_string());
+    if let Some(portable_bin) = portable_ffmpeg_bin_dir().filter(|dir| ffmpeg_install_ready(dir)) {
+        return Ok(portable_bin.join(ffmpeg_file_name()).display().to_string());
     }
 
     let app_data_bin = app_data_ffmpeg_bin_dir(&app)?;
@@ -2016,7 +2021,7 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
         .filter(|dir| can_install_to_dir(dir))
         .unwrap_or_else(|| app_data_bin.clone());
     let target_ffmpeg = target_bin.join(ffmpeg_file_name());
-    if target_ffmpeg.is_file() {
+    if ffmpeg_install_ready(&target_bin) {
         return Ok(target_ffmpeg.display().to_string());
     }
 
@@ -2027,7 +2032,7 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
         return Ok(target_ffmpeg.display().to_string());
     }
 
-    if app_data_ffmpeg.is_file() && target_bin == app_data_bin {
+    if target_bin == app_data_bin && ffmpeg_install_ready(&app_data_bin) {
         return Ok(app_data_ffmpeg.display().to_string());
     }
 
@@ -2035,28 +2040,49 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
         .map_err(|error| format!("Unable to create FFmpeg folder: {error}"))?;
     let download_dir = app_data_dir(&app)?.join("ffmpeg-download");
     let zip_path = download_dir.join("ffmpeg-release-essentials.zip");
+    let partial_zip_path = download_dir.join("ffmpeg-release-essentials.zip.partial");
     let extract_dir = download_dir.join("extract");
     fs::create_dir_all(&download_dir)
         .map_err(|error| format!("Unable to create FFmpeg download folder: {error}"))?;
 
     let script = format!(
         "$ErrorActionPreference='Stop'; \
-         $zip='{zip}'; $extract='{extract}'; $target='{target}'; \
+         $zip='{zip}'; $partial='{partial}'; $extract='{extract}'; $target='{target}'; \
+         function Test-Zip($path) {{ \
+           if (-not (Test-Path -LiteralPath $path)) {{ return $false }}; \
+           try {{ \
+             Add-Type -AssemblyName System.IO.Compression.FileSystem; \
+             $archive=[System.IO.Compression.ZipFile]::OpenRead($path); \
+             $archive.Dispose(); \
+             return $true; \
+           }} catch {{ return $false }} \
+         }}; \
          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zip) | Out-Null; \
          New-Item -ItemType Directory -Force -Path $target | Out-Null; \
-         Invoke-WebRequest -Uri '{url}' -OutFile $zip -UseBasicParsing; \
+         if (-not (Test-Zip $zip)) {{ \
+           Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; \
+           Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue; \
+           Invoke-WebRequest -Uri '{url}' -OutFile $partial -UseBasicParsing; \
+           Move-Item -LiteralPath $partial -Destination $zip -Force; \
+         }}; \
          if (Test-Path -LiteralPath $extract) {{ Remove-Item -LiteralPath $extract -Recurse -Force }}; \
          New-Item -ItemType Directory -Force -Path $extract | Out-Null; \
          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; \
          $ffmpeg = Get-ChildItem -Path $extract -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; \
          if ($null -eq $ffmpeg) {{ throw 'Could not find ffmpeg.exe in the downloaded ZIP.' }}; \
          $bin = Split-Path -Parent $ffmpeg.FullName; \
-         Copy-Item -LiteralPath (Join-Path $bin 'ffmpeg.exe') -Destination $target -Force; \
-         if (Test-Path -LiteralPath (Join-Path $bin 'ffprobe.exe')) {{ Copy-Item -LiteralPath (Join-Path $bin 'ffprobe.exe') -Destination $target -Force }}; \
-         if (Test-Path -LiteralPath (Join-Path $bin 'ffplay.exe')) {{ Copy-Item -LiteralPath (Join-Path $bin 'ffplay.exe') -Destination $target -Force }}; \
-         Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; \
+         foreach ($tool in @('ffmpeg.exe','ffprobe.exe','ffplay.exe')) {{ \
+           $source = Join-Path $bin $tool; \
+           $destination = Join-Path $target $tool; \
+           if ((Test-Path -LiteralPath $source) -and (-not (Test-Path -LiteralPath $destination))) {{ \
+             Copy-Item -LiteralPath $source -Destination $target -Force; \
+           }} \
+         }}; \
+         if (-not (Test-Path -LiteralPath (Join-Path $target 'ffmpeg.exe'))) {{ throw 'ffmpeg.exe was not installed.' }}; \
+         if (-not (Test-Path -LiteralPath (Join-Path $target 'ffprobe.exe'))) {{ throw 'ffprobe.exe was not installed.' }}; \
          Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue;",
         zip = ps_quote(&zip_path),
+        partial = ps_quote(&partial_zip_path),
         extract = ps_quote(&extract_dir),
         target = ps_quote(&target_bin),
         url = FFMPEG_DOWNLOAD_URL
@@ -2081,8 +2107,8 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
         ));
     }
 
-    if !target_ffmpeg.is_file() {
-        return Err("FFmpeg installer completed, but ffmpeg.exe was not found.".to_string());
+    if !ffmpeg_install_ready(&target_bin) {
+        return Err("FFmpeg installer completed, but ffmpeg.exe or ffprobe.exe was not found.".to_string());
     }
     Ok(target_ffmpeg.display().to_string())
 }

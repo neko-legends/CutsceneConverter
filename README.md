@@ -16,7 +16,7 @@ I originally made it because I needed a fast way to take generated video clips, 
 
 ## FFmpeg
 
-On Windows, use the Install button if FFmpeg is missing. The app downloads FFmpeg essentials into `ffmpeg\bin` next to the portable exe when that folder is writable. If Windows blocks that location, it falls back to the app data folder.
+On Windows, use the Install button if FFmpeg is missing. The app downloads FFmpeg essentials into `ffmpeg\bin` next to the portable exe when that folder is writable. If Windows blocks that location, it falls back to the app data folder. Install retries reuse a valid cached ZIP and only fill in missing FFmpeg files.
 
 On Linux, install `ffmpeg` and `ffprobe` with your package manager before running.
 
