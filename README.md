@@ -6,15 +6,24 @@ I originally made it because I needed a fast way to take generated video clips, 
 
 ![Cutscene Converter screenshot](screenshot.webp)
 
-## What It Does
+## Features
 
-- Converts queued videos or folders into MP4, WebM VP9, or OGV.
-- Supports MP4 H.264 and H.265 output.
-- Trims the beginning and end of clips.
-- Keeps native resolution or scales output to common game-ready sizes.
-- Combines queued videos in alphabetical order.
-- Handles recursive folder input, overwrite control, and parallel batch jobs.
-- Finds FFmpeg from settings, the portable app folder, the app-managed fallback install, `D:\Tools`, or `PATH`.
+- Batch convert individual video files or whole folders.
+- Export to game-friendly formats: MP4, WebM VP9, and OGV.
+- Choose MP4 H.264 for broad compatibility or H.265 for smaller modern output.
+- Trim unwanted lead-in or tail frames from generated clips before export.
+- Keep the source resolution or scale output to common game-ready sizes like 1080p, 1444p, or 4K.
+- Combine queued videos in alphabetical order into one continuous cutscene file.
+- Include subfolders when scanning a source folder.
+- Run multiple conversion jobs in parallel for faster batches.
+- Control overwrite behavior so existing outputs are either replaced or skipped.
+- Track per-file status with clear finished, skipped, failed, and canceled states.
+- Remove individual queued videos or clear the full queue.
+- Open completed output folders directly from the queue.
+- Cancel an active batch without leaving the app stuck.
+- Automatically find FFmpeg from settings, the portable app folder, the app-managed fallback install, `D:\Tools`, or `PATH`.
+- Download a portable FFmpeg build on Windows when FFmpeg is missing.
+- Keep a focused workflow: this is for preparing clips for game projects, not for timeline editing, effects, or audio mixing.
 
 ## FFmpeg
 
