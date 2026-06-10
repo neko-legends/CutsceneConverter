@@ -14,6 +14,7 @@ import {
   Scissors,
   Settings2,
   Square,
+  Trash2,
   TriangleAlert,
   Video,
   XCircle
@@ -95,6 +96,10 @@ type ConverterEvent = {
   outputPath?: string;
   message?: string;
   percent?: number;
+};
+
+type ResolvePathsOptions = {
+  restoreSaved?: boolean;
 };
 
 const APP_VERSION = "v26.6.9";
@@ -179,6 +184,10 @@ function eventLogMessage(payload: ConverterEvent) {
   return payload.message ?? null;
 }
 
+function doneStatusMessage(payload: ConverterEvent) {
+  return payload.message?.toLowerCase().includes("skipped") ? "Skipped existing output" : "Finished";
+}
+
 export default function App() {
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
@@ -249,7 +258,7 @@ export default function App() {
   );
 
   const resolvePaths = useCallback(
-    async (paths: string[]) => {
+    async (paths: string[], options: ResolvePathsOptions = {}) => {
       if (paths.length === 0) return;
       const currentConfig = configRef.current;
       if (!isTauriRuntime()) {
@@ -267,13 +276,34 @@ export default function App() {
         return;
       }
 
-      const known = new Set(queueRef.current.map((item) => item.path));
+      const restoredPathKeys = new Set(resolved.map((item) => item.path.toLowerCase()));
+      const missingSavedCount = options.restoreSaved
+        ? paths.filter((path) => !restoredPathKeys.has(path.toLowerCase())).length
+        : 0;
+      const known = new Set(queueRef.current.map((item) => item.path.toLowerCase()));
       const additions: QueueItem[] = resolved
-        .filter((item) => !known.has(item.path))
+        .filter((item) => !known.has(item.path.toLowerCase()))
         .map((item) => ({ ...item, status: "pending" }));
       const nextQueue = [...queueRef.current, ...additions];
+      queueRef.current = nextQueue;
       setQueue(nextQueue);
       void persistConfig({ ...currentConfig, sourcePaths: nextQueue.map((item) => item.path) });
+      if (options.restoreSaved) {
+        if (additions.length > 0) {
+          setHeadline(`${additions.length} saved video${additions.length === 1 ? "" : "s"} ready`);
+          pushLog(`Restored ${additions.length} saved video${additions.length === 1 ? "" : "s"}.`);
+        }
+        if (missingSavedCount > 0) {
+          pushLog(
+            `Removed ${missingSavedCount} missing saved video${missingSavedCount === 1 ? "" : "s"}.`
+          );
+        }
+        if (nextQueue.length === 0) {
+          setHeadline("Ready");
+          setProgress({ percent: 0, message: "Idle" });
+        }
+        return;
+      }
       if (additions.length > 0) {
         setHeadline(`${additions.length} video${additions.length === 1 ? "" : "s"} ready`);
         pushLog(`Queued ${additions.length} video${additions.length === 1 ? "" : "s"}.`);
@@ -364,7 +394,26 @@ export default function App() {
     setLastOutput(null);
     setProgress({ percent: 0, message: "Idle" });
     setHeadline("Ready");
-    void persistConfig({ ...config, sourcePaths: [] });
+    void persistConfig({ ...configRef.current, sourcePaths: [] });
+  };
+
+  const removeQueueItem = (path: string) => {
+    if (busy) return;
+    const removedItem = queueRef.current.find((item) => item.path === path);
+    const nextQueue = queueRef.current.filter((item) => item.path !== path);
+    queueRef.current = nextQueue;
+    setQueue(nextQueue);
+    void persistConfig({ ...configRef.current, sourcePaths: nextQueue.map((item) => item.path) });
+    if (removedItem?.outputPath === lastOutput) {
+      setLastOutput([...nextQueue].reverse().find((item) => item.outputPath)?.outputPath ?? null);
+    }
+    if (nextQueue.length === 0) {
+      setLastOutput(null);
+      setProgress({ percent: 0, message: "Idle" });
+      setHeadline("Ready");
+    } else {
+      setHeadline(`Removed ${fileName(path)}`);
+    }
   };
 
   const openFolder = async (path: string) => {
@@ -476,7 +525,7 @@ export default function App() {
         configRef.current = merged;
         setConfig(merged);
         if (merged.sourcePaths.length > 0) {
-          await resolvePaths(merged.sourcePaths);
+          await resolvePaths(merged.sourcePaths, { restoreSaved: true });
         }
       })
       .catch((error) => {
@@ -535,15 +584,22 @@ export default function App() {
       }
 
       if (payload.type === "fileDone" && payload.path) {
+        const completedPath = payload.path;
+        const statusMessage = doneStatusMessage(payload);
         setLastOutput(payload.outputPath ?? null);
+        setHeadline(`${statusMessage}: ${fileName(completedPath)}`);
+        setProgress((current) => ({
+          percent: current.percent,
+          message: `${statusMessage}: ${fileName(completedPath)}`
+        }));
         setQueue((current) =>
           current.map((item) =>
-            item.path === payload.path
+            item.path === completedPath
               ? {
                   ...item,
                   status: "done",
                   outputPath: payload.outputPath ?? item.outputPath,
-                  message: payload.message ?? "Done",
+                  message: statusMessage,
                   percent: 100
                 }
               : item
@@ -552,6 +608,7 @@ export default function App() {
       }
 
       if (payload.type === "fileError" && payload.path) {
+        setHeadline(`Failed: ${fileName(payload.path)}`);
         setQueue((current) =>
           current.map((item) =>
             item.path === payload.path
@@ -562,6 +619,7 @@ export default function App() {
       }
 
       if (payload.type === "fileCanceled" && payload.path) {
+        setHeadline(`Canceled: ${fileName(payload.path)}`);
         setQueue((current) =>
           current.map((item) =>
             item.path === payload.path
@@ -924,6 +982,7 @@ export default function App() {
               <span>Source</span>
               <span>Status</span>
               <span>Output</span>
+              <span>Actions</span>
             </div>
             {queue.length === 0 ? (
               <div className="empty">
@@ -947,11 +1006,27 @@ export default function App() {
                       <strong>{item.outputPath ? fileName(item.outputPath) : "Not written"}</strong>
                       <small>{item.outputPath ?? "Output path appears when the job starts."}</small>
                     </div>
+                  </div>
+                  <div className="row-actions">
                     {item.outputPath ? (
-                      <button className="secondary output-folder" onClick={() => void openFolder(item.outputPath ?? "")}>
+                      <button
+                        className="secondary row-action"
+                        onClick={() => void openFolder(item.outputPath ?? "")}
+                        title="Open output folder"
+                      >
                         <FolderOpen size={17} />
                       </button>
-                    ) : null}
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      className="secondary row-action danger"
+                      onClick={() => removeQueueItem(item.path)}
+                      disabled={busy}
+                      title="Remove from queue"
+                    >
+                      <Trash2 size={17} />
+                    </button>
                   </div>
                 </div>
               ))

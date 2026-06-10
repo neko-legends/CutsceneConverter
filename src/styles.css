@@ -393,7 +393,7 @@ button:disabled {
 .queue-header,
 .queue-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 180px minmax(360px, 1.55fr);
+  grid-template-columns: minmax(260px, 1fr) 180px minmax(320px, 1.45fr) 92px;
   gap: 16px;
   align-items: start;
   padding: 13px 16px;
@@ -417,7 +417,8 @@ button:disabled {
 }
 
 .queue-input,
-.output-history {
+.output-history,
+.row-actions {
   min-width: 0;
 }
 
@@ -462,17 +463,20 @@ button:disabled {
   font-weight: 800;
 }
 
-.output-history {
+.row-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
-  gap: 10px;
-  align-items: start;
+  grid-template-columns: 38px 38px;
+  gap: 8px;
 }
 
-.output-folder {
+.row-action {
   width: 38px;
   min-height: 38px;
   padding: 0;
+}
+
+.row-action.danger {
+  color: #ff9b8f;
 }
 
 .empty {
