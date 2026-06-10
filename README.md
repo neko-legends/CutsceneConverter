@@ -6,6 +6,10 @@ I originally made it because I needed a fast way to take generated video clips, 
 
 ![Cutscene Converter screenshot](screenshot.webp)
 
+## Example
+
+Here is a music video clip prepared with Cutscene Converter: [watch on YouTube](https://youtu.be/Rji3MnXg2w4).
+
 ## Features
 
 - Batch convert individual video files or whole folders.

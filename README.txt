@@ -9,6 +9,10 @@ down when needed, and combine related clips before dropping them into a project.
 It is not trying to be a full video editor. It is just a focused helper for
 getting video into video games. No pun intended.
 
+Example:
+- Music video clip prepared with Cutscene Converter:
+  https://youtu.be/Rji3MnXg2w4
+
 Features:
 - Batch convert individual video files or whole folders.
 - Export to game-friendly formats: MP4, WebM VP9, and OGV.
