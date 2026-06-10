@@ -4,6 +4,8 @@ Cutscene Converter is a small workflow tool for preparing AI-generated videos fo
 
 I originally made it because I needed a fast way to take generated video clips, clean up the front and back, convert them into game-friendly formats, scale them down when needed, and combine related clips before dropping them into a project. It is not trying to be a full video editor. It is just a focused helper for getting video into video games. No pun intended.
 
+![Cutscene Converter screenshot](screenshot.webp)
+
 ## What It Does
 
 - Converts queued videos or folders into MP4, WebM VP9, or OGV.
