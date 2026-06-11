@@ -162,6 +162,34 @@ small,
   margin-top: 8px;
 }
 
+.agent-port-field {
+  margin-top: 8px;
+}
+
+.agent-status {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin-top: 7px;
+  padding: 7px 8px;
+  border: 1px solid rgba(43, 212, 191, 0.22);
+  border-radius: 7px;
+  background: rgba(43, 212, 191, 0.06);
+}
+
+.agent-status span,
+.agent-status small {
+  overflow: hidden;
+  color: #8fe7dd;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-status small {
+  color: #b7aaa0;
+  font-size: 11px;
+}
+
 .field {
   display: grid;
   gap: 4px;
