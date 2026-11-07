@@ -47,6 +47,12 @@ const AGENT_APP_ID: &str = "cutscene-converter";
 const AGENT_APP_NAME: &str = "Cutscene Converter";
 const AGENT_API_BIND_ADDRESS: &str = "127.0.0.1";
 const AGENT_API_REGISTRY_FILE: &str = "agent-api-registry.json";
+const DEFAULT_WINDOW_WIDTH: u32 = 1920;
+const DEFAULT_WINDOW_HEIGHT: u32 = 1080;
+const MIN_WINDOW_WIDTH: u32 = 640;
+const MIN_WINDOW_HEIGHT: u32 = 360;
+const LANDSCAPE_WINDOW_WIDTH_RATIO: f64 = 0.5;
+const PORTRAIT_WINDOW_WIDTH_RATIO: f64 = 0.9;
 const FFMPEG_DOWNLOAD_URL: &str =
     "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 const VIDEO_EXTENSIONS: &[&str] = &[
@@ -2197,7 +2203,9 @@ fn install_ffmpeg(app: AppHandle) -> Result<String, String> {
     }
 
     if !ffmpeg_install_ready(&target_bin) {
-        return Err("FFmpeg installer completed, but ffmpeg.exe or ffprobe.exe was not found.".to_string());
+        return Err(
+            "FFmpeg installer completed, but ffmpeg.exe or ffprobe.exe was not found.".to_string(),
+        );
     }
     Ok(target_ffmpeg.display().to_string())
 }
@@ -2585,7 +2593,9 @@ fn parse_agent_convert_request(body: &[u8]) -> Result<AgentConvertRequest, Strin
     serde_json::from_slice(body).map_err(|error| format!("Invalid JSON request: {error}"))
 }
 
-fn agent_options_from_request(options: Option<serde_json::Value>) -> Result<ConvertOptions, String> {
+fn agent_options_from_request(
+    options: Option<serde_json::Value>,
+) -> Result<ConvertOptions, String> {
     let mut merged = serde_json::to_value(default_convert_options())
         .map_err(|error| format!("Unable to build default options: {error}"))?;
     let Some(options) = options else {
@@ -2621,11 +2631,11 @@ fn handle_agent_route(
             "version": env!("CARGO_PKG_VERSION"),
             "url": agent_status_from(agent_state, active_jobs)?.url
         })),
-        ("GET", "/openapi.json") => Ok(agent_openapi(agent_status_from(agent_state, active_jobs)?.port)),
-        ("GET", "/status") => {
-            serde_json::to_value(agent_status_from(agent_state, active_jobs)?)
-                .map_err(|error| error.to_string())
-        }
+        ("GET", "/openapi.json") => Ok(agent_openapi(
+            agent_status_from(agent_state, active_jobs)?.port,
+        )),
+        ("GET", "/status") => serde_json::to_value(agent_status_from(agent_state, active_jobs)?)
+            .map_err(|error| error.to_string()),
         ("GET", "/runtime") => {
             serde_json::to_value(check_runtime(app.clone())?).map_err(|error| error.to_string())
         }
@@ -2767,13 +2777,104 @@ fn set_agent_server_enabled(
     enabled: bool,
     port: Option<u16>,
 ) -> Result<AgentServerStatus, String> {
-    set_agent_server_enabled_inner(
-        app,
-        agent_state.inner(),
-        active_jobs.inner(),
-        enabled,
-        port,
-    )
+    set_agent_server_enabled_inner(app, agent_state.inner(), active_jobs.inner(), enabled, port)
+}
+
+fn env_truthy(name: &str) -> bool {
+    env::var(name)
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn agent_api_headless_requested() -> bool {
+    env::args().any(|arg| arg == "--headless" || arg == "--serve-agent-api")
+        || env_truthy("NEKO_AGENT_HEADLESS")
+        || env_truthy("CUTSCENE_CONVERTER_HEADLESS")
+}
+
+fn agent_api_cli_port() -> Option<u16> {
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--agent-api-port" || arg == "--agent-port" {
+            return args.next().and_then(|value| value.parse::<u16>().ok());
+        }
+        if let Some(value) = arg
+            .strip_prefix("--agent-api-port=")
+            .or_else(|| arg.strip_prefix("--agent-port="))
+        {
+            return value.parse::<u16>().ok();
+        }
+    }
+    env::var("CUTSCENE_CONVERTER_AGENT_API_PORT")
+        .or_else(|_| env::var("NEKO_AGENT_API_PORT"))
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+}
+
+fn hide_main_window(app: &tauri::App) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+fn clamp_window_dimension(value: u32, min: u32, monitor_max: u32) -> u32 {
+    let max = monitor_max.max(1);
+    value.max(min.min(max)).min(max)
+}
+
+fn initial_window_size(monitor_width: u32, monitor_height: u32) -> tauri::PhysicalSize<u32> {
+    let width_ratio = if monitor_width < monitor_height {
+        PORTRAIT_WINDOW_WIDTH_RATIO
+    } else {
+        LANDSCAPE_WINDOW_WIDTH_RATIO
+    };
+    let aspect = DEFAULT_WINDOW_HEIGHT as f64 / DEFAULT_WINDOW_WIDTH as f64;
+    let mut width = (monitor_width as f64 * width_ratio).round();
+    let mut height = (width * aspect).round();
+    let max_height = (monitor_height as f64 * 0.9).round().max(1.0);
+
+    if height > max_height {
+        height = max_height;
+        width = (height / aspect).round();
+    }
+
+    tauri::PhysicalSize::new(width.max(1.0) as u32, height.max(1.0) as u32)
+}
+
+fn apply_initial_window_size(app: &tauri::App) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let monitor_size = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .map(|monitor| *monitor.size());
+    let monitor_width = monitor_size
+        .as_ref()
+        .map(|size| size.width)
+        .unwrap_or(DEFAULT_WINDOW_WIDTH);
+    let monitor_height = monitor_size
+        .as_ref()
+        .map(|size| size.height)
+        .unwrap_or(DEFAULT_WINDOW_HEIGHT);
+    let size = initial_window_size(monitor_width, monitor_height);
+    let size = tauri::PhysicalSize::new(
+        clamp_window_dimension(size.width, MIN_WINDOW_WIDTH, monitor_width),
+        clamp_window_dimension(size.height, MIN_WINDOW_HEIGHT, monitor_height),
+    );
+
+    if let Err(error) = window.set_size(tauri::Size::Physical(size)) {
+        eprintln!("Failed to initialize window size: {error}");
+    }
+    let _ = window.center();
 }
 
 pub fn run() {
@@ -2797,23 +2898,31 @@ fn run_app(headless_agent_port: Option<u16>) {
     tauri::Builder::default()
         .manage(ActiveJobState::default())
         .manage(AgentServerState::default())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        // Tauri keeps only the last `.setup()` hook, so all startup work lives here.
         .setup(move |app| {
-            if let Some(port) = headless_agent_port {
+            let headless = headless_agent_port.is_some() || agent_api_headless_requested();
+            if !headless {
+                apply_initial_window_size(app);
+            }
+            if headless {
+                hide_main_window(app);
+                let handle = app.handle().clone();
                 let agent_state = app.state::<AgentServerState>().inner().clone();
                 let active_jobs = app.state::<ActiveJobState>().inner().clone();
-                let status = set_agent_server_enabled_inner(
-                    app.handle().clone(),
+                if let Err(error) = set_agent_server_enabled_inner(
+                    handle,
                     &agent_state,
                     &active_jobs,
                     true,
-                    Some(port),
-                )?;
-                println!("Agent API listening on {}", status.url);
+                    headless_agent_port.or_else(agent_api_cli_port),
+                ) {
+                    eprintln!("Unable to start Agent API: {error}");
+                }
             }
             Ok(())
         })
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             cancel_active_job,
             check_runtime,

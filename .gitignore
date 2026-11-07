@@ -38,3 +38,11 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+
+# Packaged app artifacts
+*.exe
+*.msi
+*.dmg
+*.zip
+*.7z
+*.tar.gz
