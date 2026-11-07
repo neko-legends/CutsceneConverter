@@ -27,27 +27,20 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
-#[cfg(target_os = "windows")]
-const DEFAULT_OUTPUT_DIR: &str =
-    r"D:\NekoLegends-Universe\games\neko-legends-awakening\godot\assets\video\cutscenes";
-
-/// Default export folder: the Godot project path on Windows, ~/Videos/Cutscenes
-/// elsewhere.
+/// Default export folder (`<home>/Videos/Cutscenes`) for a fresh install. Users
+/// pick their own folder in the app; the saved choice always wins.
 fn default_output_dir() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        DEFAULT_OUTPUT_DIR.to_string()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
+    let home = if cfg!(target_os = "windows") {
+        std::env::var_os("USERPROFILE")
+    } else {
         std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Videos")
-            .join("Cutscenes")
-            .display()
-            .to_string()
-    }
+    };
+    home.map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Videos")
+        .join("Cutscenes")
+        .display()
+        .to_string()
 }
 const DEFAULT_AGENT_API_PORT: u16 = 17337;
 const AGENT_APP_ID: &str = "cutscene-converter";
@@ -592,30 +585,6 @@ fn ffmpeg_install_ready(bin_dir: &Path) -> bool {
     bin_dir.join(ffmpeg_file_name()).is_file() && bin_dir.join(ffprobe_file_name()).is_file()
 }
 
-fn find_named_file(root: &Path, name: &str, max_depth: usize) -> Option<PathBuf> {
-    if max_depth == 0 || !root.is_dir() {
-        return None;
-    }
-    let entries = fs::read_dir(root).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file()
-            && path
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .is_some_and(|file_name| file_name.eq_ignore_ascii_case(name))
-        {
-            return Some(path);
-        }
-        if path.is_dir() {
-            if let Some(found) = find_named_file(&path, name, max_depth - 1) {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
 fn ffmpeg_candidates(app: &AppHandle, config: &AppConfig) -> Vec<PathBuf> {
     let exe_name = ffmpeg_file_name();
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -634,13 +603,6 @@ fn ffmpeg_candidates(app: &AppHandle, config: &AppConfig) -> Vec<PathBuf> {
     candidates.push(current_dir.join(exe_name));
     candidates.push(exe_dir.join("ffmpeg").join("bin").join(exe_name));
     candidates.push(exe_dir.join(exe_name));
-    if cfg!(target_os = "windows") {
-        candidates.push(PathBuf::from(r"D:\Tools\ffmpeg\bin\ffmpeg.exe"));
-        candidates.push(PathBuf::from(r"D:\Tools\ffmpeg.exe"));
-        if let Some(found) = find_named_file(Path::new(r"D:\Tools"), "ffmpeg.exe", 4) {
-            candidates.push(found);
-        }
-    }
     candidates
 }
 
