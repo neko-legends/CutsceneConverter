@@ -33,13 +33,27 @@ Here is a music video clip prepared with Cutscene Converter: [watch on YouTube](
 
 On Windows, use the Install button if FFmpeg is missing. The app downloads FFmpeg essentials into `ffmpeg\bin` next to the portable exe when that folder is writable. If Windows blocks that location, it falls back to the app data folder. Install retries reuse a valid cached ZIP and only fill in missing FFmpeg files.
 
-On Linux, install `ffmpeg` and `ffprobe` with your package manager before running.
+On Linux, install `ffmpeg` (which includes `ffprobe`) with your package manager.
 
 ## Windows Builds
 
-- Portable executable: `dist-portable\CutsceneConverter-v26.6.9-windows-x64\Cutscene Converter.exe`
-- Portable zip: `dist-portable\CutsceneConverter-v26.6.9-windows-x64.zip`
-- NSIS installer: `src-tauri\target\release\bundle\nsis\Cutscene Converter_26.6.9_x64-setup.exe`
+- Portable executable: `dist-portable\CutsceneConverter-v26.11.9-windows-x64\Cutscene Converter.exe`
+- Portable zip: `dist-portable\CutsceneConverter-v26.11.9-windows-x64.zip`
+- NSIS installer: `src-tauri\target\release\bundle\nsis\Cutscene Converter_26.11.9_x64-setup.exe`
+
+## Linux / Omarchy
+
+Each GitHub release also has a Linux AppImage, which Neko Legends Control Center installs and launches. Install `ffmpeg` with your package manager (`sudo pacman -S ffmpeg` on Arch/Omarchy). On Linux the default output folder is `~/Videos/Cutscenes`.
+
+## Agent API
+
+Enable it in the app, or start it without a window:
+
+```bash
+cutscene-converter --headless --agent-api-port 17337
+```
+
+Endpoints: `GET /health`, `/status`, `/runtime`, `/openapi.json`; `POST /convert` (`{"paths":[...],"kind":"mp4"|"webmVp9"|"ogv","options":{"outputDir":"..."}}`), `/combine`, `/cancel`.
 
 ## Development
 

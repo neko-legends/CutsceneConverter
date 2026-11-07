@@ -26,9 +26,29 @@ use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-const APP_VERSION: &str = "v26.6.9";
+const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
+#[cfg(target_os = "windows")]
 const DEFAULT_OUTPUT_DIR: &str =
     r"D:\NekoLegends-Universe\games\neko-legends-awakening\godot\assets\video\cutscenes";
+
+/// Default export folder: the Godot project path on Windows, ~/Videos/Cutscenes
+/// elsewhere.
+fn default_output_dir() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        DEFAULT_OUTPUT_DIR.to_string()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("Videos")
+            .join("Cutscenes")
+            .display()
+            .to_string()
+    }
+}
 const DEFAULT_AGENT_API_PORT: u16 = 17337;
 const AGENT_APP_ID: &str = "cutscene-converter";
 const AGENT_APP_NAME: &str = "Cutscene Converter";
@@ -281,7 +301,7 @@ impl AgentServerControl {
 
 fn default_convert_options() -> ConvertOptions {
     ConvertOptions {
-        output_dir: DEFAULT_OUTPUT_DIR.to_string(),
+        output_dir: default_output_dir(),
         quality: "Balanced".to_string(),
         output_resolution: "(native)".to_string(),
         include_subfolders: false,
@@ -314,7 +334,7 @@ struct SimpleResult {
 fn default_config() -> AppConfig {
     AppConfig {
         ffmpeg_path: String::new(),
-        output_dir: DEFAULT_OUTPUT_DIR.to_string(),
+        output_dir: default_output_dir(),
         source_paths: Vec::new(),
         quality: "Balanced".to_string(),
         output_resolution: "(native)".to_string(),
@@ -328,6 +348,7 @@ fn default_config() -> AppConfig {
     }
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
 fn hide_command_window(command: &mut Command) {
     #[cfg(target_os = "windows")]
     {
@@ -2794,9 +2815,41 @@ fn set_agent_server_enabled(
 }
 
 pub fn run() {
+    run_app(None)
+}
+
+/// Starts the app with its window hidden and the Agent API already listening on
+/// `port` (`--headless --agent-api-port <port>`, as Neko Legends Control Center
+/// launches headless apps). Runs until the process is terminated.
+pub fn run_headless_agent_api(port: u16) {
+    run_app(Some(port))
+}
+
+fn run_app(headless_agent_port: Option<u16>) {
+    let mut context = tauri::generate_context!();
+    if headless_agent_port.is_some() {
+        for window in context.config_mut().app.windows.iter_mut() {
+            window.visible = false;
+        }
+    }
     tauri::Builder::default()
         .manage(ActiveJobState::default())
         .manage(AgentServerState::default())
+        .setup(move |app| {
+            if let Some(port) = headless_agent_port {
+                let agent_state = app.state::<AgentServerState>().inner().clone();
+                let active_jobs = app.state::<ActiveJobState>().inner().clone();
+                let status = set_agent_server_enabled_inner(
+                    app.handle().clone(),
+                    &agent_state,
+                    &active_jobs,
+                    true,
+                    Some(port),
+                )?;
+                println!("Agent API listening on {}", status.url);
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -2812,6 +2865,6 @@ pub fn run() {
             start_combine_job,
             start_conversion_job
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Tauri application");
 }

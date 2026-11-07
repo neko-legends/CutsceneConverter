@@ -1,6 +1,6 @@
 [package]
 name = "cutscene-converter"
-version = "26.6.9"
+version = "26.11.9"
 description = "Local cutscene video converter"
 authors = ["Cutscene Converter contributors"]
 license = "MIT"

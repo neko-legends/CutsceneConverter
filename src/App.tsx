@@ -112,7 +112,7 @@ type ResolvePathsOptions = {
   restoreSaved?: boolean;
 };
 
-const APP_VERSION = "v26.6.9";
+const APP_VERSION = "v26.11.9";
 const AGENT_STORAGE_KEY = "cutsceneConverter.agentControlEnabled.v1";
 const AGENT_PORT_STORAGE_KEY = "cutsceneConverter.agentApiPort.v1";
 const DEFAULT_AGENT_API_PORT = 17337;
@@ -123,7 +123,7 @@ const MP4_CODEC_OPTIONS: Mp4Codec[] = ["H264", "H265"];
 
 const defaultConfig: AppConfig = {
   ffmpegPath: "",
-  outputDir: "D:\\NekoLegends-Universe\\games\\neko-legends-awakening\\godot\\assets\\video\\cutscenes",
+  outputDir: "",
   sourcePaths: [],
   quality: "Balanced",
   outputResolution: "(native)",
@@ -605,7 +605,14 @@ export default function App() {
   useEffect(() => {
     if (!isTauriRuntime() || !agentControlEnabled) return;
     const port = normalizeAgentPort(agentPort) ?? DEFAULT_AGENT_API_PORT;
-    void invoke<AgentServerStatus>("set_agent_server_enabled", { enabled: true, port })
+    // If the backend already started the API (e.g. `--headless --agent-api-port`
+    // from Neko Legends Control Center), keep its port instead of moving it.
+    void invoke<AgentServerStatus>("get_agent_server_status")
+      .then((current) =>
+        current.enabled
+          ? current
+          : invoke<AgentServerStatus>("set_agent_server_enabled", { enabled: true, port })
+      )
       .then((status) => {
         setAgentStatus(status);
         setAgentPort(String(status.port));
